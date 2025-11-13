@@ -1,9 +1,9 @@
-name: 🔍 Búsqueda Activa Trending (Cada 2 Días)
+name: 🔍 Búsqueda Activa Trending (Diario)
 
 on:
   schedule:
-    # Ejecutar cada 2 días a las 06:00 UTC
-    - cron: '0 6 */2 * *'
+    # Ejecutar diario a las 06:00 UTC
+    - cron: '0 6 * * *'
 
   workflow_dispatch:  # Permitir ejecución manual
     inputs:
