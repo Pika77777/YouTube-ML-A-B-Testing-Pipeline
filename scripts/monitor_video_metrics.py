@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
 Monitor de Metricas de Videos + Aprendizaje Automatico
-Trackea metricas en checkpoints: 1h, 6h, 24h, 48h, 72h
+Trackea metricas en checkpoints: 1h, 6h, 24h, 48h, 72h + Monitoreo extendido: 7d, 15d, 30d
 Obtiene CTR desde YouTube Analytics API
 Aprende de metricas reales (Stage 2 Learning)
 Envia alertas cuando CTR < 5%
+Detecta "sleeper hits" (videos que explotan tarde)
 """
 import os
 from datetime import datetime, timedelta, timezone
@@ -143,11 +144,17 @@ def save_learning_data(sb, video, analytics_data, vph, views, checkpoint):
     Guarda datos de aprendizaje en user_preferences (Stage 2 Learning)
     Aprende de metricas reales de YouTube
     INCLUYE: Análisis de retention + traffic sources para determinar QUÉ falla
+    INCLUYE: Métricas de evolución en checkpoints extendidos (7d, 15d, 30d)
     """
     try:
         ctr = analytics_data.get('ctr') if analytics_data else None
         retention = analytics_data.get('retention') if analytics_data else None
         traffic_sources = analytics_data.get('traffic_sources', {}) if analytics_data else {}
+
+        # Obtener métricas históricas para checkpoints extendidos
+        metrics_history = json.loads(video.get('metrics', '{}') or '{}')
+        ctr_day3 = metrics_history.get('checkpoint_72h', {}).get('ctr')
+        vph_day3 = metrics_history.get('checkpoint_72h', {}).get('vph')
 
         # ANÁLISIS INTELIGENTE: ¿Qué está fallando? (título vs miniatura)
         problem_source = "unknown"
@@ -191,45 +198,65 @@ def save_learning_data(sb, video, analytics_data, vph, views, checkpoint):
         # CLASIFICAR TÍTULO basado en métricas
         user_action = None
         reason = None
+        success_pattern = "immediate"  # Por defecto
 
-        if ctr is not None and ctr >= 8.0:
-            # CTR >= 8% = EXCELENTE (título ganador)
-            user_action = 'approved'
-            reason = f'ctr_excelente_{ctr:.1f}%'
-            problem_source = "none"
+        # DETECTAR EXPLOSIÓN TARDÍA en checkpoints extendidos
+        if checkpoint in ["checkpoint_7d", "checkpoint_15d", "checkpoint_30d"]:
+            if ctr_day3 and ctr and ctr >= ctr_day3 * 1.5:
+                # CTR aumentó 50%+ desde día 3 → EXPLOSIÓN TARDÍA
+                user_action = 'approved'
+                reason = f'delayed_explosion_ctr_{ctr:.1f}%_from_{ctr_day3:.1f}%_{checkpoint}'
+                problem_source = "none"
+                success_pattern = "delayed_explosion"
+                print(f"[LEARNING] EXPLOSIÓN TARDÍA detectada: CTR {ctr_day3:.1f}% → {ctr:.1f}% (+{(ctr/ctr_day3-1)*100:.0f}%)")
+            elif vph_day3 and vph >= vph_day3 * 2:
+                # VPH duplicó desde día 3 → EXPLOSIÓN TARDÍA
+                user_action = 'approved'
+                reason = f'delayed_explosion_vph_{vph}_from_{vph_day3}_{checkpoint}'
+                problem_source = "none"
+                success_pattern = "delayed_explosion"
+                print(f"[LEARNING] EXPLOSIÓN TARDÍA detectada: VPH {vph_day3} → {vph} (+{(vph/vph_day3-1)*100:.0f}%)")
 
-        elif ctr is not None and ctr >= 5.0:
-            # CTR 5-8% = BUENO (título aceptable)
-            user_action = 'approved'
-            reason = f'ctr_bueno_{ctr:.1f}%'
-            problem_source = "none"
+        # Si no hubo explosión tardía, evaluar normalmente
+        if user_action is None:
+            if ctr is not None and ctr >= 8.0:
+                # CTR >= 8% = EXCELENTE (título ganador)
+                user_action = 'approved'
+                reason = f'ctr_excelente_{ctr:.1f}%'
+                problem_source = "none"
 
-        elif ctr is not None and ctr < 5.0 and problem_source == "title":
-            # CTR < 5% Y problema confirmado es el TÍTULO
-            user_action = 'rejected'
-            reason = f'ctr_bajo_{ctr:.1f}%_problema_titulo'
+            elif ctr is not None and ctr >= 5.0:
+                # CTR 5-8% = BUENO (título aceptable)
+                user_action = 'approved'
+                reason = f'ctr_bueno_{ctr:.1f}%'
+                problem_source = "none"
 
-        elif ctr is not None and ctr < 5.0 and problem_source == "both":
-            # CTR < 5% Y problema es TÍTULO + MINIATURA
-            user_action = 'rejected'
-            reason = f'ctr_bajo_{ctr:.1f}%_problema_titulo_y_miniatura'
+            elif ctr is not None and ctr < 5.0 and problem_source == "title":
+                # CTR < 5% Y problema confirmado es el TÍTULO
+                user_action = 'rejected'
+                reason = f'ctr_bajo_{ctr:.1f}%_problema_titulo'
 
-        elif vph >= 100:
-            # Sin CTR pero VPH alto = titulo probablemente bueno
-            user_action = 'approved'
-            reason = f'vph_alto_{vph}'
-            problem_source = "none"
+            elif ctr is not None and ctr < 5.0 and problem_source == "both":
+                # CTR < 5% Y problema es TÍTULO + MINIATURA
+                user_action = 'rejected'
+                reason = f'ctr_bajo_{ctr:.1f}%_problema_titulo_y_miniatura'
 
-        elif vph < 25:
-            # VPH bajo = titulo probablemente malo
-            user_action = 'rejected'
-            reason = f'vph_bajo_{vph}'
-            problem_source = "title"
-        else:
-            # Neutro o problema es solo miniatura, no guardar
-            return None
+            elif vph >= 100:
+                # Sin CTR pero VPH alto = titulo probablemente bueno
+                user_action = 'approved'
+                reason = f'vph_alto_{vph}'
+                problem_source = "none"
 
-        # Guardar en user_preferences con diagnóstico completo
+            elif vph < 25:
+                # VPH bajo = titulo probablemente malo
+                user_action = 'rejected'
+                reason = f'vph_bajo_{vph}'
+                problem_source = "title"
+            else:
+                # Neutro o problema es solo miniatura, no guardar
+                return None
+
+        # Guardar en user_preferences con diagnóstico completo + métricas de evolución
         sb.table("user_preferences").insert({
             "content_type": "titulo",
             "original_content": video['title_original'],
@@ -245,7 +272,17 @@ def save_learning_data(sb, video, analytics_data, vph, views, checkpoint):
                 "traffic_sources": traffic_sources,
                 "video_id": video['video_id'],
                 "published_at": video['published_at'],
-                "learning_source": "stage2_metrics"
+                "learning_source": "stage2_metrics",
+                "success_pattern": success_pattern,
+                # Métricas de evolución (para checkpoints extendidos)
+                "evolution": {
+                    "ctr_day3": ctr_day3,
+                    "ctr_current": ctr,
+                    "vph_day3": vph_day3,
+                    "vph_current": vph,
+                    "growth_percentage_ctr": ((ctr / ctr_day3 - 1) * 100) if ctr_day3 and ctr else None,
+                    "growth_percentage_vph": ((vph / vph_day3 - 1) * 100) if vph_day3 and vph else None
+                } if checkpoint in ["checkpoint_7d", "checkpoint_15d", "checkpoint_30d"] else None
             },
             "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()
@@ -449,6 +486,15 @@ def monitor_videos():
         elif 71.9 <= hours_since < 72.1:
             checkpoint = "checkpoint_72h"
             checkpoint_name = "72 Horas"
+        elif 167.9 <= hours_since < 168.1:  # 7 días
+            checkpoint = "checkpoint_7d"
+            checkpoint_name = "7 Días"
+        elif 359.9 <= hours_since < 360.1:  # 15 días
+            checkpoint = "checkpoint_15d"
+            checkpoint_name = "15 Días"
+        elif 719.9 <= hours_since < 720.1:  # 30 días
+            checkpoint = "checkpoint_30d"
+            checkpoint_name = "30 Días"
 
         if checkpoint:
             # Verificar si ya se envio notificacion para este checkpoint
@@ -473,11 +519,11 @@ def monitor_videos():
             # Calcular VPH
             vph = int(views / hours_since) if hours_since > 0 else 0
 
-            # Obtener Analytics completo (CTR, Retention, Traffic) en checkpoint 24h, 48h, 72h
+            # Obtener Analytics completo (CTR, Retention, Traffic) en checkpoints desde 24h en adelante
             analytics_data = None
             ctr = None
             retention = None
-            if checkpoint in ["checkpoint_24h", "checkpoint_48h", "checkpoint_72h"]:
+            if checkpoint in ["checkpoint_24h", "checkpoint_48h", "checkpoint_72h", "checkpoint_7d", "checkpoint_15d", "checkpoint_30d"]:
                 published_date = datetime.fromisoformat(video['published_at'].replace('Z', '+00:00'))
                 analytics_data = get_video_analytics(video['video_id'], published_date)
                 if analytics_data:
@@ -621,13 +667,62 @@ def monitor_videos():
 
             print(f"  Vistas: {views:,} | Likes: {likes:,} | VPH: {vph:,} | {nivel}")
 
-            # Si es checkpoint_72h, marcar como completado
+            # Si es checkpoint_72h, decidir si continuar o cerrar monitoreo
             if checkpoint == "checkpoint_72h":
+                # OPCIÓN 3: Monitoreo selectivo basado en "potencial dormido"
+                # Criterios: Alta retention + Bajo CTR = Puede explotar tarde
+
+                has_potential = False
+                reason_for_extension = None
+
+                if retention and retention >= 50 and ctr and ctr < 8:
+                    # POTENCIAL DORMIDO: Contenido excelente pero no está siendo visto
+                    has_potential = True
+                    reason_for_extension = f"high_retention_{retention:.1f}%_low_ctr_{ctr:.1f}%"
+                    print(f"  [POTENCIAL DORMIDO] Retention={retention:.1f}% + CTR={ctr:.1f}%")
+                    print(f"  [EXTENDED] Monitoreo extendido activado (7d, 15d, 30d)")
+                elif vph < 20 and retention and retention >= 45:
+                    # Bajo VPH pero buena retention - puede mejorar
+                    has_potential = True
+                    reason_for_extension = f"low_vph_{vph}_good_retention_{retention:.1f}%"
+                    print(f"  [POTENCIAL DORMIDO] VPH bajo pero retention buena")
+                    print(f"  [EXTENDED] Monitoreo extendido activado (7d, 15d, 30d)")
+
+                if has_potential:
+                    # Continuar monitoreo (status sigue siendo "monitoring")
+                    sb.table("video_monitoring").update({
+                        'long_term_watch': True,
+                        'long_term_reason': reason_for_extension,
+                        'extended_monitoring_started_at': now.isoformat()
+                    }).eq('video_id', video['video_id']).execute()
+                else:
+                    # Video exitoso o sin potencial - Cerrar monitoreo
+                    sb.table("video_monitoring").update({
+                        'status': 'completed',
+                        'completed_at': now.isoformat(),
+                        'completion_reason': 'normal_72h_completion'
+                    }).eq('video_id', video['video_id']).execute()
+                    print(f"  [COMPLETADO] Monitoreo finalizado (no requiere extensión)")
+
+            # Si es checkpoint_30d, siempre cerrar (fin definitivo)
+            if checkpoint == "checkpoint_30d":
+                # Detectar si hubo explosión tardía
+                metrics_all = json.loads(video.get('metrics', '{}') or '{}')
+                ctr_day3 = metrics_all.get('checkpoint_72h', {}).get('ctr')
+                ctr_day30 = ctr
+
+                explosion_detected = False
+                if ctr_day3 and ctr_day30 and ctr_day30 >= ctr_day3 * 1.5:
+                    explosion_detected = True
+                    print(f"  [SLEEPER HIT] CTR aumentó de {ctr_day3:.1f}% a {ctr_day30:.1f}% (+{(ctr_day30/ctr_day3-1)*100:.0f}%)")
+
                 sb.table("video_monitoring").update({
                     'status': 'completed',
-                    'completed_at': now.isoformat()
+                    'completed_at': now.isoformat(),
+                    'explosion_detected': explosion_detected,
+                    'completion_reason': 'extended_30d_completion'
                 }).eq('video_id', video['video_id']).execute()
-                print(f"  [COMPLETADO] Monitoreo finalizado")
+                print(f"  [COMPLETADO] Monitoreo extendido finalizado (30 días)")
 
 if __name__ == "__main__":
     monitor_videos()
