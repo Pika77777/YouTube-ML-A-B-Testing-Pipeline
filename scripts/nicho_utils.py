@@ -487,7 +487,7 @@ def debe_ejecutarse_hoy(nombre_script: str, sb_client=None) -> bool:
                     now_utc = datetime.now(tz.utc)
                     dias_desde_ultima = (now_utc - last_run).days
                     print(f"[DEBUG] {nombre_script}: última ejecución hace {dias_desde_ultima} días")
-                    return dias_desde_ultima >= 2
+                    return dias_desde_ultima >= 1  # Cambio: permitir ejecución diaria
                 else:
                     # Primera ejecución
                     return True
