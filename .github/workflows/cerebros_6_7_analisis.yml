@@ -1,0 +1,199 @@
+name: 🧠 Cerebros 6 y 7 - Análisis de Producción y Miniaturas
+
+on:
+  schedule:
+    # Ejecutar mensualmente día 15 a las 08:00 UTC
+    - cron: '0 8 15 * *'
+
+  workflow_dispatch:  # Permitir ejecución manual
+    inputs:
+      days:
+        description: 'Analizar videos de últimos N días'
+        required: false
+        default: '30'
+        type: choice
+        options:
+          - '7'
+          - '30'
+          - '60'
+          - '90'
+      use_vision_api:
+        description: 'Usar Google Vision API para miniaturas (PAGA $0.018/mes)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+env:
+  YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+  YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+  YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+  CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+jobs:
+  # ============================================================================
+  # JOB 1: CEREBRO 6 - Análisis de Retención Visual
+  # ============================================================================
+  analisis_retencion:
+    name: 📊 Cerebro 6 - Análisis de Retención
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Ejecutar análisis de retención (Cerebro 6)
+        uses: nick-invision/retry@v3
+        with:
+          timeout_minutes: 12
+          max_attempts: 2
+          retry_wait_seconds: 60
+          command: |
+            cd scripts
+            python analizar_retencion_visual.py --days ${{ github.event.inputs.days || '30' }}
+
+      - name: Guardar logs de retención
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: cerebro6-logs
+          path: |
+            *.log
+          retention-days: 30
+
+  # ============================================================================
+  # JOB 2: CEREBRO 7 - Análisis de Miniaturas A/B
+  # ============================================================================
+  analisis_miniaturas:
+    name: 🖼️ Cerebro 7 - Análisis de Miniaturas
+    runs-on: ubuntu-latest
+    needs: analisis_retencion  # Ejecutar después de Cerebro 6
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Ejecutar análisis de miniaturas (Cerebro 7)
+        uses: nick-invision/retry@v3
+        with:
+          timeout_minutes: 8
+          max_attempts: 2
+          retry_wait_seconds: 60
+          command: |
+            cd scripts
+            if [ "${{ github.event.inputs.use_vision_api }}" = "true" ]; then
+              python analizar_thumbnails_ab.py --use-vision
+            else
+              python analizar_thumbnails_ab.py
+            fi
+
+      - name: Guardar logs de miniaturas
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: cerebro7-logs
+          path: |
+            *.log
+          retention-days: 30
+
+  # ============================================================================
+  # JOB 3: Reporte Consolidado
+  # ============================================================================
+  generar_reporte:
+    name: 📋 Generar Reporte Consolidado
+    runs-on: ubuntu-latest
+    needs: [analisis_retencion, analisis_miniaturas]
+    if: always()
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install supabase python-dotenv
+
+      - name: Generar reporte
+        run: |
+          python - <<EOF
+          import os
+          from datetime import datetime
+          from supabase import create_client
+
+          # Conectar a Supabase
+          sb = create_client(
+              os.getenv("SUPABASE_URL"),
+              os.getenv("SUPABASE_SERVICE_KEY")
+          )
+
+          # Contar análisis recientes
+          retention_count = sb.table("video_retention_analysis").select("id", count="exact").execute()
+          thumbnail_count = sb.table("thumbnail_ab_testing").select("id", count="exact").execute()
+          patterns_count = sb.table("thumbnail_patterns").select("id", count="exact").execute()
+
+          # Generar reporte
+          report = f"""
+          ============================================================
+          REPORTE CEREBROS 6 Y 7 - {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}
+          ============================================================
+
+          CEREBRO 6 (Retención Visual):
+          • Videos analizados: {retention_count.count}
+          • Tabla: video_retention_analysis
+
+          CEREBRO 7 (Miniaturas):
+          • Tests A/B analizados: {thumbnail_count.count}
+          • Patrones identificados: {patterns_count.count}
+          • Tablas: thumbnail_ab_testing, thumbnail_patterns
+
+          ============================================================
+          Estado: Análisis completado exitosamente
+          ============================================================
+          """
+
+          print(report)
+          EOF
+
+      - name: Upload reporte
+        uses: actions/upload-artifact@v3
+        with:
+          name: reporte-cerebros-6-7
+          path: |
+            *.txt
+          retention-days: 30
