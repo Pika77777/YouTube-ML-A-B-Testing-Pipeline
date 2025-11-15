@@ -70,7 +70,7 @@ jobs:
 
       - name: Guardar logs de retención
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: cerebro6-logs
           path: |
@@ -117,7 +117,7 @@ jobs:
 
       - name: Guardar logs de miniaturas
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: cerebro7-logs
           path: |
@@ -191,7 +191,7 @@ jobs:
           EOF
 
       - name: Upload reporte
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: reporte-cerebros-6-7
           path: |
