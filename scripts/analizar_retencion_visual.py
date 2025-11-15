@@ -40,6 +40,7 @@ load_dotenv(dotenv_path=env_path)
 from supabase import create_client, Client
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
+import isodate
 
 # ============================================================================
 # CONFIGURACIÓN
@@ -242,6 +243,23 @@ def calcular_avg_retention(retention_graph: List[Dict]) -> float:
         return 0.0
     return sum(point["retention"] for point in retention_graph) / len(retention_graph)
 
+def parsear_duracion_iso(duration_str: str) -> int:
+    """
+    Convierte duración ISO 8601 a segundos
+
+    Args:
+        duration_str: String en formato ISO 8601 (ej: "PT10M25S", "PT1H2M3S")
+
+    Returns:
+        Duración en segundos
+    """
+    try:
+        duration = isodate.parse_duration(duration_str)
+        return int(duration.total_seconds())
+    except Exception as e:
+        print(f"[WARNING] Error parseando duración '{duration_str}': {e}")
+        return 600  # Default 10 minutos
+
 def clasificar_retencion(avg_retention: float) -> Tuple[str, int]:
     """
     Clasifica retención y asigna score
@@ -322,11 +340,9 @@ def analizar_video(sb: Client, analytics, video_id: str, video_data: Dict) -> bo
     if not retention_graph:
         return False
 
-    # 2. Obtener duración del video
-    duration_seconds = video_data.get("duration", 0)
-    if duration_seconds == 0:
-        print(f"[WARNING] Duración desconocida para {video_id}, usando 600s por defecto")
-        duration_seconds = 600
+    # 2. Obtener duración del video (parsear formato ISO 8601)
+    duration_str = video_data.get("duration", "PT10M")
+    duration_seconds = parsear_duracion_iso(duration_str)
 
     # 3. Calcular retención promedio
     avg_retention = calcular_avg_retention(retention_graph)
@@ -352,7 +368,7 @@ def analizar_video(sb: Client, analytics, video_id: str, video_data: Dict) -> bo
             "video_id": video_id,
             "avg_view_percentage": round(avg_retention, 2),
             "avg_view_duration_seconds": int(duration_seconds * (avg_retention / 100)),
-            "total_views": video_data.get("view_count", 0),
+            "total_views": 0,  # Se obtendría de video_monitoring si es necesario
             "retention_graph": retention_graph,
             "drop_points": drop_points,
             "peak_points": peak_points,
@@ -401,8 +417,8 @@ def main():
         result = sb.table("videos") \
             .select("*") \
             .gte("published_at", fecha_limite) \
-            .eq("es_tuyo", True) \
             .order("published_at", desc=True) \
+            .limit(50) \
             .execute()
         videos = result.data
 
