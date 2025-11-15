@@ -4,7 +4,7 @@ fetch_shorts_search.py
 Búsqueda activa de shorts virales del nicho usando search.list API
 
 COSTO: 340 unidades API (300 búsquedas + 40 stats)
-FRECUENCIA: Cada 3 días
+FRECUENCIA: DIARIA (cada día)
 RESULTADO: 20-30 shorts nuevos del nicho
 """
 
@@ -388,9 +388,9 @@ def main():
     if force_execution:
         print("[fetch_shorts_search] ⚡ FORCE_EXECUTION=true - Ejecutando sin verificar frecuencia")
     else:
-        # Verificar frecuencia (cada 3 días)
+        # Verificar frecuencia (DIARIA)
         if not debe_ejecutarse_hoy("fetch_shorts_search", sb):
-            print("[fetch_shorts_search] ⏭️ No debe ejecutarse hoy (frecuencia: cada 3 días)")
+            print("[fetch_shorts_search] ⏭️ No debe ejecutarse hoy (frecuencia: DIARIA)")
             sys.exit(0)
 
     # Obtener videos existentes para evitar duplicados

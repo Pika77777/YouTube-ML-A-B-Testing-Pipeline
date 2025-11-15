@@ -3,8 +3,8 @@
 fetch_explosive_longs.py
 Búsqueda activa de videos LARGOS con crecimiento explosivo del nicho
 
-COSTO: 100 unidades API
-FRECUENCIA: Cada 3 días
+COSTO: 150 unidades API
+FRECUENCIA: DIARIA (cada día)
 RESULTADO: 10-15 videos largos virales del nicho
 """
 
@@ -386,9 +386,9 @@ def main():
     if force_execution:
         print("[fetch_explosive_longs] ⚡ FORCE_EXECUTION=true - Ejecutando sin verificar frecuencia")
     else:
-        # Verificar frecuencia (cada 3 días)
+        # Verificar frecuencia (DIARIA)
         if not debe_ejecutarse_hoy("fetch_explosive_longs", sb):
-            print("[fetch_explosive_longs] ⏭️ No debe ejecutarse hoy (frecuencia: cada 3 días)")
+            print("[fetch_explosive_longs] ⏭️ No debe ejecutarse hoy (frecuencia: DIARIA)")
             sys.exit(0)
 
     # Obtener videos existentes
