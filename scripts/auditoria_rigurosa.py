@@ -207,17 +207,29 @@ if not paths_problematicos_encontrados:
     print(f"    [OK] No se encontraron 'cd scripts' problemáticos")
     validaciones_ok.append("Todos los workflows usan paths correctos")
 
-# Verificar que todos los scripts usen 'python scripts/...'
-print("\n  Verificando formato correcto de llamadas:")
-for workflow_name, info in workflows_info.items():
-    for script in info['scripts']:
-        if '/' not in script and script.endswith('.py'):
-            # Script llamado sin 'scripts/' al inicio
-            errores_criticos.append(f"{workflow_name} llama script sin 'scripts/': {script}")
-            print(f"    [ERROR] {workflow_name}: {script} (falta 'scripts/')")
-        else:
-            print(f"    [OK] {workflow_name}: {script}")
-            validaciones_ok.append(f"{workflow_name} llama correctamente a {script}")
+# Verificar formato de llamadas en archivos reales (no parseo de YAML)
+print("\n  Verificando formato correcto de llamadas en workflows:")
+for workflow_file in workflows:
+    with open(workflow_file, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Buscar patrones problemáticos: python sin scripts/
+    if 'python ' in content:
+        # Buscar líneas con python que NO tengan 'python scripts/'
+        for line in content.split('\n'):
+            if 'python ' in line and '.py' in line and 'scripts/' not in line:
+                # Excluir líneas que son python -m, python -, comentarios, echo, o cd "scripts/gui"
+                if ('python -' not in line and
+                    'python -m' not in line and
+                    '#' not in line.split('python')[0] and
+                    'echo' not in line and
+                    'cd "scripts/gui"' not in content[:content.find(line)][max(0, content.find(line)-200):]):
+                    errores_criticos.append(f"{workflow_file.name}: Línea sin 'python scripts/': {line.strip()}")
+                    print(f"    [ERROR] {workflow_file.name}: {line.strip()[:80]}")
+
+if not errores_criticos:
+    print(f"    [OK] Todos los workflows usan 'python scripts/...' correctamente")
+    validaciones_ok.append("Todos los workflows llaman scripts correctamente")
 
 # =============================================================================
 # PASO 5: VALIDAR SINTAXIS DE TODOS LOS SCRIPTS

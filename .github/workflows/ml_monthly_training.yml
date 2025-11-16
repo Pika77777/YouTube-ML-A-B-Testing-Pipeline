@@ -64,8 +64,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           GITHUB_SHA: ${{ github.sha }}
         run: |
-          cd "GITHUB CRON/scripts"
-          python train_predictor_model.py 2>&1 | tee ../../training_log.txt
+          python scripts/train_predictor_model.py 2>&1 | tee training_log.txt
 
           # Guardar exit code
           echo "exit_code=$?" >> $GITHUB_OUTPUT
@@ -73,12 +72,12 @@ jobs:
       - name: Verificar modelo generado
         id: check_model
         run: |
-          if [ -f "GITHUB CRON/models/predictor_ensemble.pkl" ]; then
+          if [ -f "models/predictor_ensemble.pkl" ]; then
             echo "✅ Modelo generado exitosamente"
             echo "model_generated=true" >> $GITHUB_OUTPUT
 
             # Mostrar tamaño del modelo
-            size=$(stat -f%z "GITHUB CRON/models/predictor_ensemble.pkl" 2>/dev/null || stat -c%s "GITHUB CRON/models/predictor_ensemble.pkl")
+            size=$(stat -f%z "models/predictor_ensemble.pkl" 2>/dev/null || stat -c%s "models/predictor_ensemble.pkl")
             echo "📦 Tamaño del modelo: $size bytes"
           else
             echo "⚠️ Modelo NO fue generado (no cumplió criterios de validación)"
@@ -93,10 +92,10 @@ jobs:
           git config user.email "actions@github.com"
 
           # Crear directorio si no existe
-          mkdir -p "GITHUB CRON/models"
+          mkdir -p "models"
 
           # Agregar modelo
-          git add "GITHUB CRON/models/predictor_ensemble.pkl"
+          git add "models/predictor_ensemble.pkl"
 
           # Commit con mensaje detallado
           git commit -m "$(cat <<'EOF'
@@ -128,8 +127,7 @@ jobs:
           📊 Ya disponible para predicciones
 
           USO:
-          cd "GITHUB CRON/scripts"
-          python predict_video.py
+          python scripts/predict_video.py
 
           🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
