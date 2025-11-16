@@ -65,8 +65,7 @@ jobs:
           max_attempts: 2
           retry_wait_seconds: 60
           command: |
-            cd scripts
-            python analizar_retencion_visual.py --days ${{ github.event.inputs.days || '30' }}
+            python scripts/analizar_retencion_visual.py --days ${{ github.event.inputs.days || '30' }}
 
       - name: Guardar logs de retención
         if: always()
@@ -108,11 +107,10 @@ jobs:
           max_attempts: 2
           retry_wait_seconds: 60
           command: |
-            cd scripts
             if [ "${{ github.event.inputs.use_vision_api }}" = "true" ]; then
-              python analizar_thumbnails_ab.py --use-vision
+              python scripts/analizar_thumbnails_ab.py --use-vision
             else
-              python analizar_thumbnails_ab.py
+              python scripts/analizar_thumbnails_ab.py
             fi
 
       - name: Guardar logs de miniaturas
