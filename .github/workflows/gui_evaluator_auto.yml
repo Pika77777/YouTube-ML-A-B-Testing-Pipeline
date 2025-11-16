@@ -30,7 +30,7 @@ jobs:
       - name: Entrenar Patrones de Usuario (CEREBRO 1)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
           echo "=========================================="
           echo "CEREBRO 1: Entrenamiento de Preferencias"

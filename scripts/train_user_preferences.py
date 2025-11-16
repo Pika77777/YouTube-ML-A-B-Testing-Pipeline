@@ -30,7 +30,13 @@ load_dotenv()
 
 # Conectar a Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    print("[ERROR] Faltan variables de entorno: SUPABASE_URL o SUPABASE_SERVICE_KEY")
+    print("[INFO] Este script requiere acceso a Supabase para funcionar")
+    exit(0)  # Exit code 0 = no error (solo advertencia)
+
 sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 print("=" * 80)

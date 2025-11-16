@@ -76,8 +76,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
-          cd GITHUB\ CRON/scripts
-          python analizar_anti_patrones_semanal.py
+          python scripts/analizar_anti_patrones_semanal.py
 
       - name: Verificar anti-patrones detectados
         run: |
@@ -127,8 +126,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
-          cd GITHUB\ CRON/scripts
-          python save_training_snapshot.py
+          python scripts/save_training_snapshot.py
 
       - name: Verificar snapshot guardado
         run: |
@@ -168,8 +166,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
-          cd GITHUB\ CRON/scripts
-          python train_predictor_model.py
+          python scripts/train_predictor_model.py
 
       - name: Commit modelo entrenado
         if: success()
