@@ -41,11 +41,11 @@ print("=" * 80)
 CEREBROS = [
     {
         "numero": 1,
-        "nombre": "GUI Evaluator (Preferencias Usuario)",
-        "script": "train_user_preferences.py",
-        "descripcion": "Analiza aprobaciones/rechazos del usuario",
-        "frecuencia": "Semanal (domingos 5 AM)",
-        "workflow": "gui_evaluator_auto.yml"
+        "nombre": "GUI Evaluator (Evaluación Guiones)",
+        "script": "gui_evaluator_cloud.py",
+        "descripcion": "Evalúa calidad de guiones ANTES de crear video",
+        "frecuencia": "Semanal (domingos 4 AM)",
+        "workflow": "gui_weekly_training.yml"
     },
     {
         "numero": 2,
@@ -65,15 +65,15 @@ CEREBROS = [
     },
     {
         "numero": 4,
-        "nombre": "Planificador Semanal",
-        "script": "N/A (GUI local)",
-        "descripcion": "Genera sugerencias de contenido",
-        "frecuencia": "On-demand (GUI)",
-        "workflow": "N/A"
+        "nombre": "User Preferences (Learning)",
+        "script": "train_user_preferences.py",
+        "descripcion": "Analiza aprobaciones/rechazos del usuario",
+        "frecuencia": "Semanal (domingos 5 AM)",
+        "workflow": "gui_evaluator_auto.yml"
     },
     {
         "numero": 5,
-        "nombre": "Orquestador Estratégico",
+        "nombre": "Orquestador Estratégico (MAESTRO)",
         "script": "orquestador_estrategico.py",
         "descripcion": "Análisis estratégico integral",
         "frecuencia": "Semanal (lunes 9 AM)",
@@ -81,7 +81,7 @@ CEREBROS = [
     },
     {
         "numero": 6,
-        "nombre": "Analista de Retención",
+        "nombre": "Analista de Retención (Visual/Auditivo)",
         "script": "analizar_retencion_visual.py",
         "descripcion": "Analiza retención segundo a segundo",
         "frecuencia": "Mensual (día 15, 8 AM)",
@@ -89,7 +89,7 @@ CEREBROS = [
     },
     {
         "numero": 7,
-        "nombre": "Científico de Miniaturas",
+        "nombre": "Científico de Miniaturas (Psicología Clic)",
         "script": "analizar_thumbnails_ab.py",
         "descripcion": "Analiza A/B testing de miniaturas",
         "frecuencia": "Mensual (día 15, 8 AM)",
@@ -135,16 +135,6 @@ for cerebro in CEREBROS:
     print(f"Descripción: {cerebro['descripcion']}")
     print(f"Frecuencia: {cerebro['frecuencia']}")
     print(f"Workflow: {cerebro['workflow']}")
-
-    if cerebro['script'] == "N/A (GUI local)":
-        print("[SKIP] Script GUI local - no se puede validar vía CLI")
-        resultados.append({
-            "cerebro": cerebro['numero'],
-            "nombre": cerebro['nombre'],
-            "estado": "SKIP",
-            "razon": "GUI local"
-        })
-        continue
 
     # Verificar que el script existe
     script_path = Path(__file__).parent / cerebro['script']
@@ -214,9 +204,9 @@ skip = sum(1 for r in resultados if r['estado'] == 'SKIP')
 warn = sum(1 for r in resultados if r['estado'] == 'WARN')
 error = sum(1 for r in resultados if r['estado'] == 'ERROR')
 
-print(f"\nTotal cerebros: {total + 1}")  # +1 por el Cerebro 4 (GUI)
+print(f"\nTotal cerebros: {total}")
 print(f"  [OK]    {ok} cerebros validados")
-print(f"  [SKIP]  {skip + 1} cerebros (GUI local)")
+print(f"  [SKIP]  {skip} cerebros")
 print(f"  [WARN]  {warn} advertencias")
 print(f"  [ERROR] {error} errores")
 
