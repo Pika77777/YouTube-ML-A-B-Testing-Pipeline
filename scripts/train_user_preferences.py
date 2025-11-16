@@ -229,7 +229,7 @@ def generar_reporte(patrones_largos, patrones_shorts, patrones_descripcion):
     print("REPORTE DE ENTRENAMIENTO")
     print("=" * 80)
 
-    print("\n📌 TÍTULOS VIDEOS LARGOS:")
+    print("\n[LARGOS] TITULOS VIDEOS LARGOS:")
     if patrones_largos:
         print(f"  • Total aprobados: {patrones_largos.get('total_aprobados', 0)}")
         print(f"  • Total rechazados: {patrones_largos.get('total_rechazados', 0)}")
@@ -250,7 +250,7 @@ def generar_reporte(patrones_largos, patrones_shorts, patrones_descripcion):
     else:
         print("  (Sin datos suficientes)")
 
-    print("\n⚡ TÍTULOS SHORTS:")
+    print("\n[SHORTS] TITULOS SHORTS:")
     if patrones_shorts:
         print(f"  • Total aprobados: {patrones_shorts.get('total_aprobados', 0)}")
         print(f"  • Total rechazados: {patrones_shorts.get('total_rechazados', 0)}")
@@ -262,7 +262,7 @@ def generar_reporte(patrones_largos, patrones_shorts, patrones_descripcion):
     else:
         print("  (Sin datos suficientes)")
 
-    print("\n📄 DESCRIPCIONES:")
+    print("\n[DESCRIPCIONES] DESCRIPCIONES:")
     if patrones_descripcion:
         print(f"  • Total aprobadas: {patrones_descripcion.get('total_aprobados', 0)}")
         print(f"  • Ratio aprobación: {patrones_descripcion.get('ratio_aprobacion', 0):.1f}%")
