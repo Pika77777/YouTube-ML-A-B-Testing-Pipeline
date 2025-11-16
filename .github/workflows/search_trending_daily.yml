@@ -52,8 +52,7 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: |
-            cd scripts
-            python fetch_shorts_search.py
+            python scripts/fetch_shorts_search.py
 
   search_explosive_longs:
     name: 🚀 Búsqueda de Videos Largos Explosivos
@@ -82,8 +81,7 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: |
-            cd scripts
-            python fetch_explosive_longs.py
+            python scripts/fetch_explosive_longs.py
 
   purge_old_trending:
     name: 🗑️ Purgar Videos > 30 Días
@@ -112,11 +110,9 @@ jobs:
       - name: Guardar snapshot para ML (pre-purga competencia)
         run: |
           echo "📸 Guardando snapshot de competencia antes de purgar..."
-          cd scripts
-          python save_training_snapshot.py
+          python scripts/save_training_snapshot.py
           echo "✅ Snapshot guardado en ml_training_data"
 
       - name: Ejecutar purga_trending_30dias.py
         run: |
-          cd scripts
-          python purga_trending_30dias.py
+          python scripts/purga_trending_30dias.py
