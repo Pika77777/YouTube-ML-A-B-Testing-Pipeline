@@ -42,7 +42,7 @@ SEARCH_KEYWORDS = [
 ]
 
 MAX_RESULTS_PER_KEYWORD = 50
-MIN_NICHO_SCORE = 50  # FIX 2025-11-08: Cambiar de 60 a 50 para capturar score medio con explosividad
+MIN_NICHO_SCORE = 40  # FIX 2025-11-18: Bajar de 50 a 40 para ser más permisivo y capturar más shorts
 
 def load_env():
     """Cargar variables de entorno"""

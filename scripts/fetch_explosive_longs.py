@@ -27,15 +27,19 @@ except ImportError as e:
     sys.exit(1)
 
 # Keywords para búsqueda de videos largos explosivos
-# FIX 2025-11-07: Expandir a keywords TOP + cambiar a lista múltiple
+# FIX 2025-11-18: Expandir keywords y hacer filtros más permisivos
 SEARCH_KEYWORDS = [
     "tutorial chatgpt completo",
     "whatsapp tutorial completo",
     "curso windows gratis",
-    "tutorial ia 2025"
+    "tutorial ia 2025",
+    "como usar ia gratis",
+    "tutorial pc 2025",
+    "google gemini tutorial",
+    "apps gratis 2025"
 ]
-MAX_RESULTS_PER_KEYWORD = 20  # Menos por keyword porque son videos largos
-MIN_NICHO_SCORE = 50  # FIX 2025-11-08: Cambiar de 60 a 50 para capturar score medio con explosividad
+MAX_RESULTS_PER_KEYWORD = 30  # FIX 2025-11-18: Aumentar de 20 a 30 para capturar más videos
+MIN_NICHO_SCORE = 40  # FIX 2025-11-18: Bajar de 50 a 40 para ser más permisivo
 MIN_DURATION_SECONDS = 180  # Mínimo 3 minutos para considerar "largo"
 
 def load_env():
@@ -84,8 +88,9 @@ def search_explosive_longs(yt, keyword, max_results=50):
     Costo: 100 unidades API por keyword
     """
     try:
-        # Fecha límite: últimos 7 días (videos MUY recientes con explosión viral)
-        published_after = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        # FIX 2025-11-18: Expandir de 7 a 14 días para capturar más videos
+        # Fecha límite: últimos 14 días (videos recientes con potencial viral)
+        published_after = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
 
         request = yt.search().list(
             part="id,snippet",
@@ -274,8 +279,9 @@ def filter_and_process_longs(videos, channel_subs, existing_ids, min_score=60, m
             min_score=min_score
         )
 
-        # Si score < 50, rechazar inmediatamente (no es del nicho)
-        if nicho_score < 50:
+        # FIX 2025-11-18: Bajar umbral de 50 a 40 para ser más permisivo
+        # Si score < 40, rechazar inmediatamente (no es del nicho)
+        if nicho_score < 40:
             stats["bajo_score"] += 1
             continue
 
