@@ -19,8 +19,8 @@ import sys
 from datetime import datetime, timedelta, timezone
 from supabase import create_client, Client
 
-# Configuración
-TU_CHANNEL_ID = "UCH-TuIdAqui"  # Cambiar por tu channel_id real
+# Configuración (FIX: Actualizado con channel ID real)
+TU_CHANNEL_ID = "UCWkGLaq5XxtF_r-0DKGZh4A"  # Tu canal real
 
 def load_env():
     """Cargar variables de entorno"""

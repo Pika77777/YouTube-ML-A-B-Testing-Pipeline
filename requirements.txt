@@ -2,6 +2,7 @@ python-dotenv
 google-api-python-client
 google-auth-oauthlib
 google-auth-httplib2
+google-generativeai>=0.3.0
 supabase>=2.4.0,<3
 postgrest>=0.14.8
 pytz

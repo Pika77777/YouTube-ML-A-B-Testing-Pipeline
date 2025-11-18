@@ -174,9 +174,9 @@ jobs:
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
 
-          # Agregar modelo si fue creado
-          if [ -f "GITHUB CRON/models/predictor_ensemble.pkl" ]; then
-            git add "GITHUB CRON/models/predictor_ensemble.pkl"
+          # Agregar modelo si fue creado (FIX: Corregir path incorrecto)
+          if [ -f "models/predictor_ensemble.pkl" ]; then
+            git add "models/predictor_ensemble.pkl"
 
             git commit -m "$(cat <<'EOF'
           UPDATE: Modelo ML entrenado - $(date +%Y-%m)

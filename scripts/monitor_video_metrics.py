@@ -469,32 +469,32 @@ def monitor_videos():
         published = datetime.fromisoformat(video['published_at'].replace('Z', '+00:00'))
         hours_since = (now - published).total_seconds() / 3600
 
-        # Determinar checkpoint
+        # Determinar checkpoint (FIX: Ventanas ampliadas x5 para tolerar retrasos de GitHub Actions)
         checkpoint = None
         checkpoint_name = None
 
-        if 0.9 <= hours_since < 1.1:
+        if 0.5 <= hours_since < 1.5:  # ±30 min (antes: ±6 min)
             checkpoint = "checkpoint_1h"
             checkpoint_name = "1 Hora"
-        elif 5.9 <= hours_since < 6.1:
+        elif 5.5 <= hours_since < 6.5:  # ±30 min (antes: ±6 min)
             checkpoint = "checkpoint_6h"
             checkpoint_name = "6 Horas"
-        elif 23.9 <= hours_since < 24.1:
+        elif 23.5 <= hours_since < 24.5:  # ±30 min (antes: ±6 min)
             checkpoint = "checkpoint_24h"
             checkpoint_name = "24 Horas"
-        elif 47.9 <= hours_since < 48.1:
+        elif 47.5 <= hours_since < 48.5:  # ±30 min (antes: ±6 min)
             checkpoint = "checkpoint_48h"
             checkpoint_name = "48 Horas"
-        elif 71.9 <= hours_since < 72.1:
+        elif 71.5 <= hours_since < 72.5:  # ±30 min (antes: ±6 min)
             checkpoint = "checkpoint_72h"
             checkpoint_name = "72 Horas"
-        elif 167.9 <= hours_since < 168.1:  # 7 días
+        elif 166 <= hours_since < 170:  # ±2h para 7 días (antes: ±6 min)
             checkpoint = "checkpoint_7d"
             checkpoint_name = "7 Días"
-        elif 359.9 <= hours_since < 360.1:  # 15 días
+        elif 358 <= hours_since < 362:  # ±2h para 15 días (antes: ±6 min)
             checkpoint = "checkpoint_15d"
             checkpoint_name = "15 Días"
-        elif 719.9 <= hours_since < 720.1:  # 30 días
+        elif 718 <= hours_since < 722:  # ±2h para 30 días (antes: ±6 min)
             checkpoint = "checkpoint_30d"
             checkpoint_name = "30 Días"
 
