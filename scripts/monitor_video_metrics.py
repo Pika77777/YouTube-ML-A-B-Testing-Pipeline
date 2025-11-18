@@ -454,9 +454,11 @@ def monitor_videos():
     )
 
     # Obtener videos en monitoreo
+    # MISMA LÓGICA import_daily: Procesar videos NUEVOS primero (por published_at DESC)
     videos = sb.table("video_monitoring")\
         .select("*")\
         .eq("status", "monitoring")\
+        .order("published_at", desc=True)\
         .execute()
 
     print(f"[INFO] Videos en monitoreo: {len(videos.data)}")

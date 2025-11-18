@@ -46,9 +46,11 @@ def detect_new_videos():
     # Buscar videos de ultimas 24 horas
     yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
 
+    # MISMA LÓGICA import_daily: Procesar videos NUEVOS primero (por published_at DESC)
     new_videos = sb.table("videos")\
         .select("video_id, title, published_at")\
         .gte("published_at", yesterday)\
+        .order("published_at", desc=True)\
         .execute()
 
     print(f"[INFO] Buscando videos desde {yesterday}")
