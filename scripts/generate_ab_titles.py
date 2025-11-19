@@ -136,7 +136,7 @@ def classify_video_type(original_title):
     """
     try:
         genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
 
         classification_prompt = f"""Actúa como Experto en Clasificación de Contenido de YouTube.
 
@@ -222,7 +222,7 @@ def generate_ab_titles(original_title, video_data=None, sb=None):
 
         # 4. LLAMAR A GEMINI AI PARA GENERAR TÍTULOS
         genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
 
         response = model.generate_content(prompt)
         text = response.text.strip()
