@@ -69,15 +69,22 @@ def detect_new_videos():
             # NUEVO VIDEO DETECTADO
             print(f"\n[NEW] {video['title']}")
 
-            # Generar titulos A/B
+            # Generar titulos A/B (NUEVO: pasar video_data completo para detectar perfil)
             from generate_ab_titles import generate_ab_titles
-            variants = generate_ab_titles(video['title'], sb)
 
+            video_data = {
+                'title': video['title'],
+                'channel_id': video.get('channel_id'),
+                'video_id': video['video_id']
+            }
+            variants = generate_ab_titles(video['title'], video_data, sb)
+
+            print(f"  [PROFILE] {variants.get('profile', 'unknown').upper()}")
             print(f"  Variante A: {variants['variant_a']}")
             print(f"  Variante B: {variants['variant_b']}")
             print(f"  Variante C: {variants['variant_c']}")
 
-            # Insertar en monitoring
+            # Insertar en monitoring (NUEVO: incluir perfil detectado)
             sb.table("video_monitoring").insert({
                 "video_id": video['video_id'],
                 "title_original": video['title'],
@@ -87,6 +94,7 @@ def detect_new_videos():
                 "title_variant_a": variants['variant_a'],
                 "title_variant_b": variants['variant_b'],
                 "title_variant_c": variants['variant_c'],
+                "profile": variants.get('profile', 'unknown'),
                 "notifications_sent": {"new_video": datetime.now(timezone.utc).isoformat()}
             }).execute()
 

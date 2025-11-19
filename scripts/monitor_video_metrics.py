@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Monitor de Metricas de Videos + Aprendizaje Automatico
+Monitor de Metricas de Videos + Aprendizaje Automatico MULTI-NICHO
 Trackea metricas en checkpoints: 1h, 6h, 24h, 48h, 72h + Monitoreo extendido: 7d, 15d, 30d
 Obtiene CTR desde YouTube Analytics API
 Aprende de metricas reales (Stage 2 Learning)
-Envia alertas cuando CTR < 5%
+NUEVO: Alertas inteligentes según perfil del canal (TECH vs GROWTH)
 Detecta "sleeper hits" (videos que explotan tarde)
 """
 import os
@@ -16,6 +16,11 @@ import json
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
+from config_profiles import (
+    get_channel_profile,
+    get_profile_config,
+    ChannelProfile
+)
 
 env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
@@ -113,6 +118,159 @@ def get_video_analytics(video_id, published_date):
     except Exception as e:
         print(f"[ERROR] Error obteniendo analytics: {e}")
         return None
+
+def check_video_health(video_data, metrics, hours_online, profile, config):
+    """
+    LÓGICA DE ALERTAS MULTI-NICHO
+    Evalúa la salud del video según el perfil del canal (TECH vs GROWTH)
+
+    Args:
+        video_data: Dict con datos del video (title, video_id, published_at)
+        metrics: Dict con métricas actuales (views, ctr, retention, vph)
+        hours_online: Float con horas desde publicación
+        profile: ChannelProfile enum (TECH, GROWTH, UNKNOWN)
+        config: Dict con configuración del perfil
+
+    Returns:
+        Tuple (status, message, priority)
+        - status: str - Estado del video (WAITING_INDEXING, HEALTHY_SEO_DRIP, VIRAL_SUCCESS, ALERT_STAGNANT, etc)
+        - message: str - Mensaje descriptivo
+        - priority: str - Nivel de prioridad (INFO, SUCCESS, MEDIUM, HIGH)
+    """
+    views = metrics.get('views', 0)
+    ctr = metrics.get('ctr')
+    retention = metrics.get('retention')
+    vph = metrics.get('vph', 0)
+
+    # ========================================================================
+    # REGLA UNIVERSAL: ZONA DE SILENCIO
+    # ========================================================================
+    min_hours = config['min_hours_before_alert']
+    if hours_online < min_hours:
+        return (
+            "WAITING_INDEXING",
+            f"Video en indexación... Esperar {min_hours}h antes de evaluar ({hours_online:.1f}h transcurridas)",
+            "INFO"
+        )
+
+    # ========================================================================
+    # REGLA UNIVERSAL: ARCHIVO DESPUÉS DEL LÍMITE
+    # ========================================================================
+    archive_hours = config['archive_after_hours']
+    if hours_online > archive_hours:
+        return (
+            "ARCHIVED",
+            f"Monitoreo completado ({hours_online:.1f}h > {archive_hours}h)",
+            "INFO"
+        )
+
+    # ========================================================================
+    # LÓGICA ESPECÍFICA PARA TECH (SEO/Goteo Paciente)
+    # ========================================================================
+    if profile == ChannelProfile.PROFILE_TECH:
+        healthy_velocity = config['healthy_views_velocity']
+        stagnant_velocity = config['stagnant_views_velocity']
+        min_ctr = config['min_ctr_threshold']
+        min_retention = config['min_retention_threshold']
+
+        # CASO 1: Goteo SEO Saludable
+        if vph >= healthy_velocity:
+            return (
+                "HEALTHY_SEO_DRIP",
+                f"Goteo SEO saludable ({vph} VPH >= {healthy_velocity} VPH objetivo)",
+                "SUCCESS"
+            )
+
+        # CASO 2: Video Estancado (CTR bajo + VPH bajo)
+        if vph < stagnant_velocity and ctr is not None and ctr < min_ctr:
+            return (
+                "ALERT_STAGNANT",
+                f"Video estancado: VPH {vph} < {stagnant_velocity}, CTR {ctr:.1f}% < {min_ctr}%. Considera mejorar SEO (título, tags, descripción)",
+                "MEDIUM"
+            )
+
+        # CASO 3: CTR bajo pero VPH aceptable (problema de indexación)
+        if ctr is not None and ctr < min_ctr and vph >= stagnant_velocity:
+            return (
+                "ALERT_LOW_CTR_SEO",
+                f"CTR bajo ({ctr:.1f}% < {min_ctr}%) pero VPH aceptable ({vph} VPH). Optimizar título/miniatura sin urgencia",
+                "MEDIUM"
+            )
+
+        # CASO 4: Retention baja (contenido malo)
+        if retention is not None and retention < min_retention:
+            return (
+                "ALERT_LOW_RETENTION",
+                f"Retention baja ({retention:.1f}% < {min_retention}%). Problema: contenido del video, no título",
+                "MEDIUM"
+            )
+
+        # CASO 5: Todo bien (monitoreo continuo)
+        return (
+            "MONITORING_SEO",
+            f"Monitoreo SEO activo: VPH {vph}, CTR {ctr:.1f}% si disponible" if ctr else f"Monitoreo SEO activo: VPH {vph}",
+            "INFO"
+        )
+
+    # ========================================================================
+    # LÓGICA ESPECÍFICA PARA GROWTH (Viral/Impacto Inmediato)
+    # ========================================================================
+    elif profile == ChannelProfile.PROFILE_GROWTH:
+        healthy_velocity = config['healthy_views_velocity']
+        stagnant_velocity = config['stagnant_views_velocity']
+        min_ctr = config['min_ctr_threshold']
+        min_retention = config['min_retention_threshold']
+
+        # CASO 1: VIRALIDAD DETECTADA
+        if vph >= healthy_velocity:
+            return (
+                "VIRAL_SUCCESS",
+                f"🚀 VIRAL! Video explotando: {vph} VPH >= {healthy_velocity} VPH objetivo",
+                "SUCCESS"
+            )
+
+        # CASO 2: CTR CRÍTICO (Título urgente)
+        if ctr is not None and ctr < min_ctr and hours_online >= 6:
+            return (
+                "ALERT_LOW_CTR_URGENT",
+                f"⚠️ CTR CRÍTICO: {ctr:.1f}% < {min_ctr}%. CAMBIAR TÍTULO YA (ventana viral cerrándose)",
+                "HIGH"
+            )
+
+        # CASO 3: Clickbait Mismatch (título bueno pero video malo)
+        if retention is not None and retention < min_retention and ctr is not None and ctr >= min_ctr:
+            return (
+                "ALERT_CLICKBAIT_MISMATCH",
+                f"Título bueno (CTR {ctr:.1f}%) pero video malo (Retention {retention:.1f}% < {min_retention}%). Problema: contenido, no título",
+                "HIGH"
+            )
+
+        # CASO 4: Video Estancado (VPH bajo)
+        if vph < stagnant_velocity and hours_online >= 6:
+            return (
+                "ALERT_STAGNANT_VIRAL",
+                f"Video no viral: VPH {vph} < {stagnant_velocity}. Revisar título + miniatura URGENTE",
+                "HIGH"
+            )
+
+        # CASO 5: Monitoreo activo (esperando viralidad)
+        return (
+            "MONITORING_VIRAL",
+            f"Esperando viralidad: VPH {vph}, CTR {ctr:.1f}%" if ctr else f"Esperando viralidad: VPH {vph}",
+            "INFO"
+        )
+
+    # ========================================================================
+    # FALLBACK (PROFILE_UNKNOWN)
+    # ========================================================================
+    else:
+        # Usar lógica genérica (basada en TECH)
+        if vph >= 20:
+            return ("MONITORING_OK", f"Video estable: {vph} VPH", "SUCCESS")
+        elif vph < 10:
+            return ("ALERT_LOW_PERFORMANCE", f"VPH bajo: {vph}. Revisar título/miniatura", "MEDIUM")
+        else:
+            return ("MONITORING_NEUTRAL", f"Monitoreo activo: {vph} VPH", "INFO")
 
 def send_email(subject, body):
     """Envia email usando SMTP"""
@@ -547,29 +705,68 @@ def monitor_videos():
             # Actualizar notificaciones enviadas
             notifications[checkpoint] = now.isoformat()
 
-            # Actualizar en base de datos
+            # NUEVO: Detectar perfil del video
+            video_data_for_profile = {
+                'title': video['title_original'],
+                'channel_id': video.get('channel_id'),
+                'video_id': video['video_id']
+            }
+            profile = get_channel_profile(video_data_for_profile)
+            profile_config = get_profile_config(profile)
+
+            # NUEVO: Evaluar salud del video con lógica multi-nicho
+            metrics_for_health = {
+                'views': views,
+                'ctr': ctr,
+                'retention': retention,
+                'vph': vph
+            }
+            health_status, health_message, health_priority = check_video_health(
+                video_data_for_profile,
+                metrics_for_health,
+                hours_since,
+                profile,
+                profile_config
+            )
+
+            print(f"  [PROFILE: {profile.value.upper()}] {health_status}: {health_message}")
+
+            # Actualizar en base de datos (con perfil y health status)
             sb.table("video_monitoring").update({
                 'metrics': json.dumps(current_metrics),
                 'notifications_sent': json.dumps(notifications),
                 'last_check_at': now.isoformat(),
-                'monitoring_stage': checkpoint
+                'monitoring_stage': checkpoint,
+                'profile': profile.value,
+                'health_status': health_status,
+                'health_message': health_message,
+                'health_priority': health_priority
             }).eq('video_id', video['video_id']).execute()
 
-            # Evaluar performance (con CTR si está disponible)
-            if checkpoint == "checkpoint_1h":
-                nivel = "EXCELENTE" if vph >= 100 else "BUENO" if vph >= 50 else "NORMAL" if vph >= 25 else "BAJO"
-                color = "#10b981" if vph >= 50 else "#f59e0b" if vph >= 25 else "#ef4444"
-            elif checkpoint == "checkpoint_24h":
-                # En 24h usamos CTR como métrica principal
-                if ctr is not None:
-                    nivel = "VIRAL" if ctr >= 10.0 else "EXCELENTE" if ctr >= 8.0 else "BUENO" if ctr >= 5.0 else "CRÍTICO"
-                    color = "#10b981" if ctr >= 8.0 else "#f59e0b" if ctr >= 5.0 else "#ef4444"
+            # Evaluar performance para emails (basado en health_priority y profile)
+            if health_priority == "SUCCESS":
+                nivel = "VIRAL" if profile == ChannelProfile.PROFILE_GROWTH else "EXCELENTE"
+                color = "#10b981"
+            elif health_priority == "HIGH":
+                nivel = "CRÍTICO"
+                color = "#ef4444"
+            elif health_priority == "MEDIUM":
+                nivel = "NECESITA ATENCIÓN"
+                color = "#f59e0b"
+            else:  # INFO
+                if checkpoint == "checkpoint_1h":
+                    nivel = "EXCELENTE" if vph >= 100 else "BUENO" if vph >= 50 else "NORMAL" if vph >= 25 else "BAJO"
+                    color = "#10b981" if vph >= 50 else "#f59e0b" if vph >= 25 else "#ef4444"
+                elif checkpoint == "checkpoint_24h":
+                    if ctr is not None:
+                        nivel = "VIRAL" if ctr >= 10.0 else "EXCELENTE" if ctr >= 8.0 else "BUENO" if ctr >= 5.0 else "CRÍTICO"
+                        color = "#10b981" if ctr >= 8.0 else "#f59e0b" if ctr >= 5.0 else "#ef4444"
+                    else:
+                        nivel = "VIRAL" if vph >= 50 else "BUENO" if vph >= 25 else "NORMAL" if vph >= 10 else "BAJO"
+                        color = "#10b981" if vph >= 25 else "#f59e0b" if vph >= 10 else "#ef4444"
                 else:
-                    nivel = "VIRAL" if vph >= 50 else "BUENO" if vph >= 25 else "NORMAL" if vph >= 10 else "BAJO"
-                    color = "#10b981" if vph >= 25 else "#f59e0b" if vph >= 10 else "#ef4444"
-            else:
-                nivel = "BUENO" if vph >= 20 else "NORMAL" if vph >= 10 else "BAJO"
-                color = "#10b981" if vph >= 20 else "#f59e0b" if vph >= 10 else "#ef4444"
+                    nivel = "BUENO" if vph >= 20 else "NORMAL" if vph >= 10 else "BAJO"
+                    color = "#10b981" if vph >= 20 else "#f59e0b" if vph >= 10 else "#ef4444"
 
             # STAGE 2 LEARNING: Guardar en user_preferences (con diagnóstico de problema)
             learning_result = save_learning_data(sb, video, analytics_data, vph, views, checkpoint)
