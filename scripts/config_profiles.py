@@ -48,23 +48,37 @@ PROFILE_CONFIG = {
     ChannelProfile.PROFILE_TECH: {
         # SEO-driven: Tráfico de búsqueda lento pero constante
         "min_hours_before_alert": 12,           # Esperar 12h para indexación
-        "archive_after_hours": 48,              # Monitorear 48h (2 días)
+        "archive_after_hours": 168,             # Monitorear 7 días (SEO toma tiempo)
         "healthy_views_velocity": 5,            # 5+ vistas/hora = goteo SEO saludable
         "stagnant_views_velocity": 2,           # <2 vistas/hora + bajo CTR = problema
         "min_ctr_threshold": 3.5,               # CTR mínimo aceptable (%)
         "min_retention_threshold": 35,          # Retention mínimo (%)
         "alert_priority": "LOW",                # SEO es más paciente
+
+        # NUEVO: Checkpoints específicos para evaluación (horas)
+        "evaluation_checkpoints": [24, 48, 168],  # 24h, 48h, 7 días
+
+        # NUEVO: Umbrales para diagnóstico de impresiones
+        "impressions_low_threshold": 500,       # <500 impresiones = FANTASMA
+        "impressions_normal_threshold": 2000,   # 500-2000 = Normal, >2000 = Alto
     },
 
     ChannelProfile.PROFILE_GROWTH: {
         # Viral-driven: Impacto inmediato o muerte
-        "min_hours_before_alert": 6,            # Esperar 6h (viralidad rápida)
-        "archive_after_hours": 24,              # Monitorear 24h (1 día)
+        "min_hours_before_alert": 3,            # Esperar 3h (viralidad muy rápida)
+        "archive_after_hours": 24,              # Monitorear 24h (ventana viral)
         "healthy_views_velocity": 20,           # 20+ vistas/hora = viralidad
         "stagnant_views_velocity": 10,          # <10 vistas/hora = revisar
         "min_ctr_threshold": 4.0,               # CTR mínimo aceptable (%)
         "min_retention_threshold": 40,          # Retention mínimo (%)
         "alert_priority": "HIGH",               # Viralidad requiere acción rápida
+
+        # NUEVO: Checkpoints específicos para evaluación (horas)
+        "evaluation_checkpoints": [3, 6, 12, 24],  # 3h, 6h, 12h, 24h
+
+        # NUEVO: Umbrales para diagnóstico de impresiones
+        "impressions_low_threshold": 1000,      # <1000 impresiones = FANTASMA
+        "impressions_normal_threshold": 5000,   # 1000-5000 = Normal, >5000 = Alto
     }
 }
 
@@ -75,43 +89,95 @@ PROFILE_CONFIG = {
 
 VOCABULARY_TECH = {
     "accion": [
-        "Solucionar", "Reparar", "Restaurar", "Corregir", "Eliminar",
-        "Quitar", "Potenciar", "Optimizar", "Acelerar", "Configurar"
+        "Solucionar", "Reparar", "Restaurar", "Corregir", "Eliminar", "Quitar",
+        "Potenciar", "Optimizar", "Acelerar", "Configurar", "Activar", "Desactivar",
+        "Actualizar", "Migrar", "Instalar", "Desinstalar", "Recuperar", "Rescatar",
+        "Arreglar", "Debugear", "Limpiar", "Boost", "Tunear", "Hackear",
+        "Automatizar", "Simplificar", "Revertir", "Forzar"
     ],
     "seguridad": [
-        "Sin Formatear", "Sin Perder Datos", "Método Seguro",
-        "Reversible", "Sin Riesgos", "Respaldo Incluido", "Protegido"
+        "Sin Formatear", "Sin Perder Datos", "Método Seguro", "Reversible",
+        "Sin Riesgos", "Respaldo Incluido", "Protegido", "Con Backup",
+        "No Destructivo", "Safe Mode", "Modo Seguro", "Sin Root",
+        "Sin Admin", "Sin Permisos", "Portable", "Sin Instalar",
+        "Probado", "Confiable", "Sin Virus", "Limpio"
     ],
     "velocidad": [
-        "Al Instante", "En 1 Minuto", "Rápido", "Express", "Ya",
-        "En Segundos", "Inmediato", "Sin Espera"
+        "Al Instante", "En 1 Minuto", "Rápido", "Express", "Ya", "En Segundos",
+        "Inmediato", "Sin Espera", "Ultra Rápido", "Flash", "One-Click",
+        "Automático", "En 3 Pasos", "En 5 Minutos", "Speedrun", "Turbo",
+        "Sin Complicaciones", "Directo", "Fast", "Quick Fix"
     ],
     "autoridad": [
-        "Definitivo", "Garantizado", "100% Efectivo", "Solución Final",
-        "Método 2025", "Comprobado", "Oficial", "El Mejor"
+        "Definitivo", "Garantizado", "100% Efectivo", "Solución Final", "Método 2025",
+        "Comprobado", "Oficial", "El Mejor", "Profesional", "Experto", "Advanced",
+        "Pro", "Ultimate", "Master", "Premium", "Gold", "Certified",
+        "Verificado", "Testeado", "Método Real", "Sin Fake", "Funciona 2025",
+        "Actualizado", "Última Versión", "Nueva Forma"
     ]
 }
 
 VOCABULARY_GROWTH = {
     "dolor": [
-        "Vacío", "Soledad", "Fracaso", "Ansiedad", "Cansado",
-        "Ignorado", "Pobreza Mental", "Estancado", "Débil", "Perdido"
+        # Emociones Negativas
+        "Vacío", "Soledad", "Fracaso", "Ansiedad", "Cansado", "Ignorado", "Perdido",
+        "Estancado", "Débil", "Confundido", "Roto", "Deprimido", "Agotado", "Frustrado",
+        # Estados Mentales
+        "Pobreza Mental", "Mente Dispersa", "Sin Rumbo", "Bloqueado", "Atrapado",
+        "Mediocre", "Invisible", "Inseguro", "Cobarde", "Conformista", "Víctima",
+        # Situaciones
+        "Sin Dinero", "Sin Propósito", "Sin Motivación", "Sin Energía", "Sin Amigos",
+        "Procrastinando", "Comparándote", "Autosaboteándote", "Sufriendo en Silencio"
     ],
     "revelacion": [
-        "La Verdad", "El Secreto", "Lo que nadie te dice", "La Mentira",
-        "Despertar", "La Regla Oculta", "El Error", "La Trampa"
+        # Verdades Ocultas
+        "La Verdad", "El Secreto", "Lo que nadie te dice", "La Mentira", "Despertar",
+        "La Regla Oculta", "El Error", "La Trampa", "El Lado Oscuro", "La Realidad",
+        # Descubrimientos
+        "Lo que Descubrí", "El Patrón Oculto", "La Fórmula Prohibida", "El Método Secreto",
+        "La Lección Oculta", "El Código", "La Clave", "El Truco Mental",
+        # Contradicción
+        "La Paradoja", "Lo Opuesto", "Al Revés", "La Ironía", "El Absurdo",
+        "La Contradicción", "Lo que No Ves", "El Punto Ciego"
     ],
     "autoridad": [
-        "Marco Aurelio", "Séneca", "Lección Antigua", "Sabiduría Japonesa",
-        "El Monje", "La Ciencia", "Los Estoicos", "Filosofía Milenaria"
+        # Filosofía Antigua
+        "Marco Aurelio", "Séneca", "Epicteto", "Los Estoicos", "Lección Antigua",
+        "Sabiduría Japonesa", "El Monje", "Filosofía Milenaria", "Buda", "Lao Tzu",
+        # Ciencia/Psicología
+        "La Ciencia", "Neurociencia", "Psicología", "Estudios de Harvard", "Carl Jung",
+        "Viktor Frankl", "La Investigación", "Los Expertos", "Datos Reales",
+        # Modernos
+        "Jordan Peterson", "Naval Ravikant", "James Clear", "Cal Newport", "Tim Ferriss",
+        "Elon Musk", "Steve Jobs", "Bruce Lee", "Kobe Bryant", "David Goggins",
+        # Cultural
+        "Sabiduría Samurái", "Bushido", "Ikigai", "Kaizen", "Wabi-Sabi", "Miyamoto Musashi"
     ],
     "transformacion": [
-        "Invencible", "Control Total", "Mente de Acero", "Frialdad",
-        "Disciplina", "Imparable", "Inquebrantable", "Poder Mental"
+        # Poder Mental
+        "Invencible", "Imparable", "Inquebrantable", "Mente de Acero", "Frialdad",
+        "Control Total", "Poder Mental", "Disciplina", "Resiliencia", "Antifragil",
+        # Estados Deseados
+        "Paz Mental", "Libertad", "Abundancia", "Plenitud", "Felicidad", "Éxito",
+        "Victoria", "Triunfo", "Maestría", "Excelencia", "Grandeza", "Legado",
+        # Cualidades
+        "Enfoque Láser", "Claridad Mental", "Confianza Brutal", "Propósito Claro",
+        "Energía Infinita", "Productividad Máxima", "Flow State", "Modo Dios",
+        "Versión Superior", "Nivel Siguiente", "Transformación Total"
     ],
     "habitos": [
-        "Rutina", "Mañana", "5 AM", "Dopamina", "Cerebro", "Enfoque",
-        "1%", "Eliminar", "Construir", "Despertar"
+        # Rutinas/Tiempo
+        "Rutina", "Mañana", "5 AM", "Noche", "Antes de Dormir", "Al Despertar",
+        "Ritual Diario", "Sistema", "Protocolo", "Método", "Práctica",
+        # Conceptos Psicológicos
+        "Dopamina", "Cerebro", "Enfoque", "Atención", "Concentración", "Willpower",
+        "Fuerza de Voluntad", "Mentalidad", "Mindset", "Identidad", "Creencias",
+        # Acciones
+        "Eliminar", "Construir", "Despertar", "Renunciar", "Soltar", "Dejar Ir",
+        "Comenzar", "Parar", "Cambiar", "Romper", "Crear", "Destruir",
+        # Mejora Continua
+        "1%", "Kaizen", "Compounding", "Momentum", "Consistencia", "Disciplina Diaria",
+        "Pequeños Pasos", "Micro Hábitos", "Hábitos Atómicos", "Progreso Invisible"
     ]
 }
 

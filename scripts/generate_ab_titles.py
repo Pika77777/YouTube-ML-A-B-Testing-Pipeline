@@ -123,9 +123,70 @@ C: [título variante C]"""
     return prompt
 
 
+def classify_video_type(original_title):
+    """
+    PASO 1: Clasificación Inteligente con Gemini
+    Determina si el video es TÉCNICO o VIRAL/EMOCIONAL
+
+    Args:
+        original_title: Título original del video
+
+    Returns:
+        str: "TECNICO" o "VIRAL"
+    """
+    try:
+        genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+        model = genai.GenerativeModel('gemini-1.5-flash')
+
+        classification_prompt = f"""Actúa como Experto en Clasificación de Contenido de YouTube.
+
+Analiza este título de video: "{original_title}"
+
+PREGUNTA: ¿De qué tipo es este video?
+
+TIPO A - TÉCNICO:
+- Tutoriales de software/hardware
+- Solución de errores técnicos
+- Instalación/configuración
+- Noticias de tecnología/IA/software
+- Guías paso a paso
+- Reviews técnicos
+Ejemplos: "Solucionar Error 0xc00007b", "Instalar GameHub", "ChatGPT: Nuevas Funciones 2025"
+
+TIPO B - VIRAL/EMOCIONAL:
+- Motivación/Superación personal
+- Psicología/Filosofía
+- Estoicismo/Disciplina/Hábitos
+- Reflexiones/Pensamientos
+- Desarrollo personal
+- Mensajes inspiracionales
+Ejemplos: "La Regla de Marco Aurelio", "Por esto Fracasas", "Hábitos que Cambiarán tu Vida"
+
+RESPONDE SOLO UNA PALABRA (sin explicaciones):
+- "TECNICO" si es del Tipo A
+- "VIRAL" si es del Tipo B"""
+
+        response = model.generate_content(classification_prompt)
+        classification = response.text.strip().upper()
+
+        # Validar respuesta
+        if "TECNICO" in classification:
+            return "TECNICO"
+        elif "VIRAL" in classification:
+            return "VIRAL"
+        else:
+            # Fallback: si no puede clasificar, usar detección por keywords
+            print(f"[WARN] Gemini no pudo clasificar claramente: {classification}")
+            return "TECNICO"  # Default conservador
+
+    except Exception as e:
+        print(f"[ERROR] Error en clasificación: {e}")
+        return "TECNICO"  # Fallback seguro
+
+
 def generate_ab_titles(original_title, video_data=None, sb=None):
     """
-    Genera 3 variantes de título optimizadas según el perfil del canal
+    Genera 3 variantes de título optimizadas según clasificación inteligente
 
     Args:
         original_title: Título original del video
@@ -133,28 +194,33 @@ def generate_ab_titles(original_title, video_data=None, sb=None):
         sb: Cliente Supabase (opcional)
 
     Returns:
-        dict con keys: variant_a, variant_b, variant_c, profile
+        dict con keys: variant_a, variant_b, variant_c, profile, video_type
     """
     try:
-        # 1. DETECTAR PERFIL DEL CANAL
+        # 1. CLASIFICACIÓN INTELIGENTE CON GEMINI (NUEVO)
+        video_type = classify_video_type(original_title)
+        print(f"[CLASSIFICATION] Video tipo: {video_type}")
+
+        # 2. DETECTAR PERFIL (mantener para compatibilidad)
         if video_data is None:
             video_data = {'title': original_title}
 
-        profile = get_channel_profile(video_data)
-        vocabulary = get_vocabulary(profile)
-
-        print(f"[PROFILE] Detectado: {profile.value.upper()}")
-
-        # 2. CONSTRUIR PROMPT SEGÚN PERFIL
-        if profile == ChannelProfile.PROFILE_TECH:
-            prompt = build_prompt_tech(original_title, vocabulary)
-        elif profile == ChannelProfile.PROFILE_GROWTH:
-            prompt = build_prompt_growth(original_title, vocabulary)
+        # Forzar perfil según clasificación de Gemini
+        if video_type == "TECNICO":
+            profile = ChannelProfile.PROFILE_TECH
         else:
-            # Fallback a TECH
-            prompt = build_prompt_tech(original_title, vocabulary)
+            profile = ChannelProfile.PROFILE_GROWTH
 
-        # 3. LLAMAR A GEMINI AI
+        vocabulary = get_vocabulary(profile)
+        print(f"[PROFILE] Asignado: {profile.value.upper()}")
+
+        # 3. CONSTRUIR PROMPT SEGÚN CLASIFICACIÓN
+        if video_type == "TECNICO":
+            prompt = build_prompt_tech(original_title, vocabulary)
+        else:
+            prompt = build_prompt_growth(original_title, vocabulary)
+
+        # 4. LLAMAR A GEMINI AI PARA GENERAR TÍTULOS
         genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
         model = genai.GenerativeModel('gemini-1.5-flash')
 
@@ -178,15 +244,21 @@ def generate_ab_titles(original_title, video_data=None, sb=None):
 
         # 6. AGREGAR METADATOS
         variants['profile'] = profile.value
+        variants['video_type'] = video_type  # NUEVO: Tipo detectado por Gemini
 
-        print(f"[GEMINI AI] Variantes {profile.value.upper()} generadas: {original_title[:40]}...")
+        print(f"[GEMINI AI] Variantes {video_type} generadas: {original_title[:40]}...")
         return variants
 
     except Exception as e:
         print(f"[ERROR] Error generando variantes con Gemini AI: {e}")
 
-        # FALLBACK: Templates predefinidos según perfil
-        profile = get_channel_profile(video_data) if video_data else ChannelProfile.PROFILE_TECH
+        # FALLBACK: Intentar clasificar primero
+        try:
+            video_type = classify_video_type(original_title)
+        except:
+            video_type = "TECNICO"
+
+        profile = ChannelProfile.PROFILE_TECH if video_type == "TECNICO" else ChannelProfile.PROFILE_GROWTH
         print(f"[FALLBACK] Usando templates {profile.value.upper()} predefinidos")
 
         if profile == ChannelProfile.PROFILE_TECH:
@@ -194,14 +266,16 @@ def generate_ab_titles(original_title, video_data=None, sb=None):
                 'variant_a': f"{original_title[:50]} - Solución Definitiva 2025",
                 'variant_b': f"¿{original_title[:45]}? Repáralo Sin Formatear",
                 'variant_c': f"¡{original_title[:45]}! Al Instante - 3 Pasos",
-                'profile': profile.value
+                'profile': profile.value,
+                'video_type': video_type
             }
         elif profile == ChannelProfile.PROFILE_GROWTH:
             return {
                 'variant_a': f"Por esto sigues {original_title[:45]} (Cámbialo)",
                 'variant_b': f"La Regla Estoica de {original_title[:40]}",
                 'variant_c': f"7 Cosas para {original_title[:45]} en Silencio",
-                'profile': profile.value
+                'profile': profile.value,
+                'video_type': video_type
             }
 
         # Fallback genérico
@@ -209,7 +283,8 @@ def generate_ab_titles(original_title, video_data=None, sb=None):
             'variant_a': f"El SECRETO de {original_title[:50]}",
             'variant_b': f"Cómo {original_title[:55]} (Paso a Paso)",
             'variant_c': f"🔥 {original_title[:55]} - 2025",
-            'profile': 'unknown'
+            'profile': 'unknown',
+            'video_type': 'unknown'
         }
 
 

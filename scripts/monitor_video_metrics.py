@@ -62,12 +62,12 @@ def get_video_analytics(video_id, published_date):
         start_date = published_date.strftime('%Y-%m-%d')
         end_date = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
-        # Query 1: Métricas generales (CTR, Retention)
+        # Query 1: Métricas generales (CTR, Retention, IMPRESIONES)
         response = analytics.reports().query(
             ids='channel==MINE',
             startDate=start_date,
             endDate=end_date,
-            metrics='views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,cardClickRate',
+            metrics='views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,cardImpressions,cardClickRate',
             dimensions='video',
             filters=f'video=={video_id}'
         ).execute()
@@ -76,10 +76,12 @@ def get_video_analytics(video_id, published_date):
 
         if response.get('rows'):
             row = response['rows'][0]
-            metrics['ctr'] = row[5] if len(row) > 5 else None
+            metrics['views'] = row[0] if len(row) > 0 else None
             metrics['retention'] = row[3] if len(row) > 3 else None  # averageViewPercentage
             metrics['avg_view_duration'] = row[2] if len(row) > 2 else None
-            print(f"[ANALYTICS] {video_id}: CTR={metrics.get('ctr')}% Retention={metrics.get('retention')}%")
+            metrics['impressions'] = row[5] if len(row) > 5 else None  # NUEVO: Impresiones
+            metrics['ctr'] = row[6] if len(row) > 6 else None
+            print(f"[ANALYTICS] {video_id}: Impresiones={metrics.get('impressions')} CTR={metrics.get('ctr')}% Retention={metrics.get('retention')}%")
 
         # Query 2: Traffic Sources (para saber si problema es título o miniatura)
         try:
@@ -118,6 +120,135 @@ def get_video_analytics(video_id, published_date):
     except Exception as e:
         print(f"[ERROR] Error obteniendo analytics: {e}")
         return None
+
+def diagnose_root_cause(impressions, ctr, retention, views, profile, config):
+    """
+    MATRIZ DE DIAGNÓSTICO DE CAUSA RAÍZ
+    Determina QUÉ está fallando (Título, Miniatura o Coherencia)
+
+    Args:
+        impressions: int - Número de impresiones del video
+        ctr: float - Click-Through Rate (%)
+        retention: float - Retention promedio (%)
+        views: int - Número de vistas
+        profile: ChannelProfile enum
+        config: dict - Configuración del perfil
+
+    Returns:
+        dict con:
+        - syndrome: str - FANTASMA, INVISIBLE, CLICKBAIT, SUCCESS
+        - culprit: str - TITULO, MINIATURA, COHERENCIA, NINGUNO
+        - impressions_level: str - Baja, Normal, Alta
+        - reason: str - Explicación técnica
+        - action: str - Acción recomendada específica por perfil
+    """
+    min_ctr = config['min_ctr_threshold']
+    min_retention = config['min_retention_threshold']
+    imp_low = config['impressions_low_threshold']
+    imp_normal = config['impressions_normal_threshold']
+
+    # Clasificar impresiones
+    if impressions is None:
+        impressions_level = "Desconocido"
+    elif impressions < imp_low:
+        impressions_level = "Baja"
+    elif impressions < imp_normal:
+        impressions_level = "Normal"
+    else:
+        impressions_level = "Alta"
+
+    # ========================================================================
+    # CASO A: SÍNDROME DEL "FANTASMA" (Bajas Impresiones)
+    # ========================================================================
+    if impressions and impressions < imp_low:
+        if profile == ChannelProfile.PROFILE_TECH:
+            return {
+                "syndrome": "FANTASMA",
+                "culprit": "TITULO",
+                "impressions_level": impressions_level,
+                "reason": f"YouTube NO está mostrando el video ({impressions} impresiones < {imp_low}). El algoritmo no sabe de qué trata o no encuentra audiencia.",
+                "action": "Reescribir Título enfocándose en KEYWORDS más buscadas (nombre del software, versión, error específico, solución). Agregar números de error exactos. Ejemplo: 'Solucionar Error 0xc00007b Windows 11 - Método 2025'"
+            }
+        elif profile == ChannelProfile.PROFILE_GROWTH:
+            return {
+                "syndrome": "FANTASMA",
+                "culprit": "TITULO",
+                "impressions_level": impressions_level,
+                "reason": f"YouTube NO está mostrando el video ({impressions} impresiones < {imp_low}). El tema no interesa o el ángulo es muy aburrido.",
+                "action": "Cambiar Título a algo más RADICAL/POLÉMICO/EMOCIONAL. Usar dolor específico + promesa clara. Ejemplo: 'Por esto sigues Fracasando (El Error que Nadie Ve)' o 'La Verdad sobre la Disciplina que te Ocultan'"
+            }
+        else:
+            return {
+                "syndrome": "FANTASMA",
+                "culprit": "TITULO",
+                "impressions_level": impressions_level,
+                "reason": f"Bajas impresiones ({impressions} < {imp_low}). Problema de visibilidad SEO.",
+                "action": "Mejorar título con keywords más específicas y relevantes para tu audiencia."
+            }
+
+    # ========================================================================
+    # CASO B: SÍNDROME DEL "INVISIBLE" (Altas Impresiones + Bajo CTR)
+    # ========================================================================
+    if impressions and impressions >= imp_normal and ctr is not None and ctr < min_ctr:
+        if profile == ChannelProfile.PROFILE_TECH:
+            return {
+                "syndrome": "INVISIBLE",
+                "culprit": "MINIATURA",
+                "impressions_level": impressions_level,
+                "reason": f"YouTube muestra el video a muchas personas ({impressions} impresiones) pero nadie hace clic (CTR {ctr:.1f}% < {min_ctr}%). La imagen no detiene el scroll.",
+                "action": "MANTÉN EL TÍTULO (está bien posicionado). Cambia la MINIATURA: Simplificar texto (máx 3 palabras), hacer zoom en el error o resultado final, usar colores de CONTRASTE (Rojo/Verde/Amarillo), agregar flecha señalando el problema."
+            }
+        elif profile == ChannelProfile.PROFILE_GROWTH:
+            return {
+                "syndrome": "INVISIBLE",
+                "culprit": "MINIATURA",
+                "impressions_level": impressions_level,
+                "reason": f"YouTube muestra el video masivamente ({impressions} impresiones) pero nadie entra (CTR {ctr:.1f}% < {min_ctr}%). La imagen es genérica/aburrida.",
+                "action": "MANTÉN EL TÍTULO (está funcionando). Cambia la MINIATURA: Usar expresión facial MÁS INTENSA (sorpresa, enojo, determinación), aumentar contraste brutal, texto emocional corto ('STOP', 'NADIE LO SABE', 'CUIDADO'), fondo oscuro con luz dramática."
+            }
+        else:
+            return {
+                "syndrome": "INVISIBLE",
+                "culprit": "MINIATURA",
+                "impressions_level": impressions_level,
+                "reason": f"Alto alcance ({impressions} impresiones) pero bajo CTR ({ctr:.1f}%). Problema visual.",
+                "action": "Mantén el título. Rediseña la miniatura con mayor contraste y simplicidad visual."
+            }
+
+    # ========================================================================
+    # CASO C: SÍNDROME DEL "CLICKBAIT FALLIDO" (Alto CTR + Baja Retention)
+    # ========================================================================
+    if ctr is not None and ctr >= min_ctr and retention is not None and retention < min_retention:
+        return {
+            "syndrome": "CLICKBAIT",
+            "culprit": "COHERENCIA",
+            "impressions_level": impressions_level,
+            "reason": f"La gente entra mucho (CTR {ctr:.1f}%) pero se va rápido (Retention {retention:.1f}% < {min_retention}%). El título/miniatura prometieron algo que el video NO entrega al inicio.",
+            "action": "NO CAMBIES la miniatura (funciona). NO CAMBIES el título (funciona). PROBLEMA: Los primeros 30 segundos del video. Acción: 1) Entregar la promesa EN LOS PRIMEROS 10 SEGUNDOS, 2) Editar descripción explicando exactamente QUÉ encontrarán, 3) Poner comentario fijado con timestamp del contenido prometido."
+        }
+
+    # ========================================================================
+    # CASO D: TODO BIEN (Éxito)
+    # ========================================================================
+    if ctr is not None and ctr >= min_ctr and (retention is None or retention >= min_retention):
+        return {
+            "syndrome": "SUCCESS",
+            "culprit": "NINGUNO",
+            "impressions_level": impressions_level,
+            "reason": f"Video funcionando correctamente. CTR {ctr:.1f}% (>= {min_ctr}%)" + (f", Retention {retention:.1f}% (>= {min_retention}%)" if retention else ""),
+            "action": "Continuar monitoreando. El título y miniatura están optimizados."
+        }
+
+    # ========================================================================
+    # CASO E: DATOS INSUFICIENTES
+    # ========================================================================
+    return {
+        "syndrome": "INSUFFICIENT_DATA",
+        "culprit": "DESCONOCIDO",
+        "impressions_level": impressions_level,
+        "reason": "Datos insuficientes para diagnóstico completo. Esperar más tiempo para acumular métricas.",
+        "action": "Continuar monitoreo en próximos checkpoints."
+    }
 
 def check_video_health(video_data, metrics, hours_online, profile, config):
     """
@@ -627,34 +758,41 @@ def monitor_videos():
         published = datetime.fromisoformat(video['published_at'].replace('Z', '+00:00'))
         hours_since = (now - published).total_seconds() / 3600
 
-        # Determinar checkpoint (FIX: Ventanas ampliadas x5 para tolerar retrasos de GitHub Actions)
+        # NUEVO: Detectar perfil del video primero
+        video_data_for_profile = {
+            'title': video['title_original'],
+            'channel_id': video.get('channel_id'),
+            'video_id': video['video_id']
+        }
+        profile = get_channel_profile(video_data_for_profile)
+        profile_config = get_profile_config(profile)
+
+        # NUEVO: Checkpoints diferenciados por perfil
+        evaluation_checkpoints = profile_config['evaluation_checkpoints']
+
         checkpoint = None
         checkpoint_name = None
 
-        if 0.5 <= hours_since < 1.5:  # ±30 min (antes: ±6 min)
-            checkpoint = "checkpoint_1h"
-            checkpoint_name = "1 Hora"
-        elif 5.5 <= hours_since < 6.5:  # ±30 min (antes: ±6 min)
-            checkpoint = "checkpoint_6h"
-            checkpoint_name = "6 Horas"
-        elif 23.5 <= hours_since < 24.5:  # ±30 min (antes: ±6 min)
-            checkpoint = "checkpoint_24h"
-            checkpoint_name = "24 Horas"
-        elif 47.5 <= hours_since < 48.5:  # ±30 min (antes: ±6 min)
-            checkpoint = "checkpoint_48h"
-            checkpoint_name = "48 Horas"
-        elif 71.5 <= hours_since < 72.5:  # ±30 min (antes: ±6 min)
-            checkpoint = "checkpoint_72h"
-            checkpoint_name = "72 Horas"
-        elif 166 <= hours_since < 170:  # ±2h para 7 días (antes: ±6 min)
-            checkpoint = "checkpoint_7d"
-            checkpoint_name = "7 Días"
-        elif 358 <= hours_since < 362:  # ±2h para 15 días (antes: ±6 min)
-            checkpoint = "checkpoint_15d"
-            checkpoint_name = "15 Días"
-        elif 718 <= hours_since < 722:  # ±2h para 30 días (antes: ±6 min)
-            checkpoint = "checkpoint_30d"
-            checkpoint_name = "30 Días"
+        # Buscar el checkpoint más cercano según el perfil
+        for target_hours in evaluation_checkpoints:
+            # Ventana de tolerancia: ±30 min para checkpoints < 48h, ±2h para >= 48h
+            tolerance = 0.5 if target_hours < 48 else 2.0
+
+            if target_hours - tolerance <= hours_since <= target_hours + tolerance:
+                checkpoint = f"checkpoint_{target_hours}h"
+
+                # Nombres legibles
+                if target_hours < 24:
+                    checkpoint_name = f"{int(target_hours)} Horas"
+                elif target_hours == 24:
+                    checkpoint_name = "24 Horas"
+                elif target_hours == 48:
+                    checkpoint_name = "48 Horas"
+                elif target_hours == 168:
+                    checkpoint_name = "7 Días"
+                else:
+                    checkpoint_name = f"{int(target_hours)}h"
+                break
 
         if checkpoint:
             # Verificar si ya se envio notificacion para este checkpoint
@@ -679,16 +817,17 @@ def monitor_videos():
             # Calcular VPH
             vph = int(views / hours_since) if hours_since > 0 else 0
 
-            # Obtener Analytics completo (CTR, Retention, Traffic) en checkpoints desde 24h en adelante
+            # Obtener Analytics completo (CTR, Retention, IMPRESIONES) en todos los checkpoints
             analytics_data = None
             ctr = None
             retention = None
-            if checkpoint in ["checkpoint_24h", "checkpoint_48h", "checkpoint_72h", "checkpoint_7d", "checkpoint_15d", "checkpoint_30d"]:
-                published_date = datetime.fromisoformat(video['published_at'].replace('Z', '+00:00'))
-                analytics_data = get_video_analytics(video['video_id'], published_date)
-                if analytics_data:
-                    ctr = analytics_data.get('ctr')
-                    retention = analytics_data.get('retention')
+            impressions = None
+            published_date = datetime.fromisoformat(video['published_at'].replace('Z', '+00:00'))
+            analytics_data = get_video_analytics(video['video_id'], published_date)
+            if analytics_data:
+                ctr = analytics_data.get('ctr')
+                retention = analytics_data.get('retention')
+                impressions = analytics_data.get('impressions')
 
             # Guardar metricas en JSONB
             current_metrics = json.loads(video.get('metrics', '{}') or '{}')
@@ -699,74 +838,47 @@ def monitor_videos():
                 'comments': comments,
                 'vph': vph,
                 'ctr': ctr,
+                'retention': retention,
+                'impressions': impressions,
                 'hours_since': round(hours_since, 1)
             }
 
             # Actualizar notificaciones enviadas
             notifications[checkpoint] = now.isoformat()
 
-            # NUEVO: Detectar perfil del video
-            video_data_for_profile = {
-                'title': video['title_original'],
-                'channel_id': video.get('channel_id'),
-                'video_id': video['video_id']
-            }
-            profile = get_channel_profile(video_data_for_profile)
-            profile_config = get_profile_config(profile)
+            # NUEVO: MATRIZ DE DIAGNÓSTICO (Llamar a diagnose_root_cause)
+            diagnosis = diagnose_root_cause(impressions, ctr, retention, views, profile, profile_config)
 
-            # NUEVO: Evaluar salud del video con lógica multi-nicho
-            metrics_for_health = {
-                'views': views,
-                'ctr': ctr,
-                'retention': retention,
-                'vph': vph
-            }
-            health_status, health_message, health_priority = check_video_health(
-                video_data_for_profile,
-                metrics_for_health,
-                hours_since,
-                profile,
-                profile_config
-            )
+            print(f"  [PROFILE: {profile.value.upper()}]")
+            print(f"  [DIAGNOSIS] {diagnosis['syndrome']}: Culpable → {diagnosis['culprit']}")
+            print(f"  [IMPRESIONES] {impressions if impressions else 'N/A'} ({diagnosis['impressions_level']})")
+            print(f"  [CTR] {ctr:.1f}%" if ctr else "  [CTR] N/A")
 
-            print(f"  [PROFILE: {profile.value.upper()}] {health_status}: {health_message}")
-
-            # Actualizar en base de datos (con perfil y health status)
+            # Actualizar en base de datos (con perfil, diagnosis completo)
             sb.table("video_monitoring").update({
                 'metrics': json.dumps(current_metrics),
                 'notifications_sent': json.dumps(notifications),
                 'last_check_at': now.isoformat(),
                 'monitoring_stage': checkpoint,
                 'profile': profile.value,
-                'health_status': health_status,
-                'health_message': health_message,
-                'health_priority': health_priority
+                'diagnosis_syndrome': diagnosis['syndrome'],
+                'diagnosis_culprit': diagnosis['culprit'],
+                'diagnosis_reason': diagnosis['reason'],
+                'diagnosis_action': diagnosis['action'],
+                'impressions_level': diagnosis['impressions_level']
             }).eq('video_id', video['video_id']).execute()
 
-            # Evaluar performance para emails (basado en health_priority y profile)
-            if health_priority == "SUCCESS":
-                nivel = "VIRAL" if profile == ChannelProfile.PROFILE_GROWTH else "EXCELENTE"
+            # Evaluar performance para emails basado en el diagnóstico
+            if diagnosis['syndrome'] == "SUCCESS":
+                nivel = "ÉXITO"
                 color = "#10b981"
-            elif health_priority == "HIGH":
-                nivel = "CRÍTICO"
+            elif diagnosis['syndrome'] in ["FANTASMA", "INVISIBLE", "CLICKBAIT"]:
+                nivel = diagnosis['syndrome']
                 color = "#ef4444"
-            elif health_priority == "MEDIUM":
-                nivel = "NECESITA ATENCIÓN"
-                color = "#f59e0b"
-            else:  # INFO
-                if checkpoint == "checkpoint_1h":
-                    nivel = "EXCELENTE" if vph >= 100 else "BUENO" if vph >= 50 else "NORMAL" if vph >= 25 else "BAJO"
-                    color = "#10b981" if vph >= 50 else "#f59e0b" if vph >= 25 else "#ef4444"
-                elif checkpoint == "checkpoint_24h":
-                    if ctr is not None:
-                        nivel = "VIRAL" if ctr >= 10.0 else "EXCELENTE" if ctr >= 8.0 else "BUENO" if ctr >= 5.0 else "CRÍTICO"
-                        color = "#10b981" if ctr >= 8.0 else "#f59e0b" if ctr >= 5.0 else "#ef4444"
-                    else:
-                        nivel = "VIRAL" if vph >= 50 else "BUENO" if vph >= 25 else "NORMAL" if vph >= 10 else "BAJO"
-                        color = "#10b981" if vph >= 25 else "#f59e0b" if vph >= 10 else "#ef4444"
-                else:
-                    nivel = "BUENO" if vph >= 20 else "NORMAL" if vph >= 10 else "BAJO"
-                    color = "#10b981" if vph >= 20 else "#f59e0b" if vph >= 10 else "#ef4444"
+            else:
+                # Fallback basado en VPH
+                nivel = "BUENO" if vph >= 20 else "NORMAL" if vph >= 10 else "BAJO"
+                color = "#10b981" if vph >= 20 else "#f59e0b" if vph >= 10 else "#ef4444"
 
             # STAGE 2 LEARNING: Guardar en user_preferences (con diagnóstico de problema)
             learning_result = save_learning_data(sb, video, analytics_data, vph, views, checkpoint)
@@ -811,49 +923,53 @@ def monitor_videos():
                         'problem_diagnosed': problem_source
                     }).eq('video_id', video['video_id']).execute()
 
-            # Enviar notificacion normal
+            # Enviar notificacion con REPORTE DE DIAGNÓSTICO
             email_body = f"""
             <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6;">
-                <h2 style="color: #2563eb;">Reporte {checkpoint_name}</h2>
-                <p><strong>Video:</strong></p>
-                <p style="background: #f3f4f6; padding: 10px; border-radius: 5px;">{video['title_original']}</p>
+                <h2 style="color: #2563eb;">📊 REPORTE DE DIAGNÓSTICO - {checkpoint_name}</h2>
 
-                <div style="background: {color}; color: white; padding: 15px; border-radius: 10px; margin: 20px 0;">
-                    <h3 style="margin: 0;">Performance: {nivel}</h3>
-                    <p style="font-size: 24px; margin: 5px 0;"><strong>{vph:,} VPH</strong></p>
+                <div style="background: #f3f4f6; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                    <p style="margin: 0;"><strong>Video:</strong> {video['title_original']}</p>
+                    <p style="margin: 5px 0 0 0;"><strong>Perfil:</strong> {profile.value.upper()}</p>
+                    <p style="margin: 5px 0 0 0;"><strong>Tiempo Online:</strong> {hours_since:.1f} horas</p>
                 </div>
 
-                <h3 style="color: #16a34a;">Metricas Actuales:</h3>
-                <table style="width: 100%; border-collapse: collapse;">
-                    {"<tr style='background: " + ("#dcfce7" if ctr and ctr >= 8.0 else "#fee2e2" if ctr and ctr < 5.0 else "#f3f4f6") + ";'><td style='padding: 10px; border: 1px solid #e5e7eb;'><strong>CTR (Click-Through Rate)</strong></td><td style='padding: 10px; border: 1px solid #e5e7eb; font-weight: bold; color: " + ("#16a34a" if ctr and ctr >= 8.0 else "#dc2626" if ctr and ctr < 5.0 else "#6b7280") + ";'>" + f"{ctr:.1f}%" + (" ✅ EXCELENTE" if ctr >= 8.0 else " ⚠️ CRÍTICO" if ctr < 5.0 else " ✓ OK") + "</td></tr>" if ctr is not None else ""}
-                    <tr style="background: #f3f4f6;">
+                <h3 style="color: #2563eb;">DATOS:</h3>
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                    <tr style="background: {'#dcfce7' if diagnosis['impressions_level'] == 'Alta' else '#fee2e2' if diagnosis['impressions_level'] == 'Baja' else '#f3f4f6'};">
+                        <td style="padding: 10px; border: 1px solid #e5e7eb;"><strong>Impresiones</strong></td>
+                        <td style="padding: 10px; border: 1px solid #e5e7eb; font-weight: bold;">{impressions if impressions else 'N/A'} ({diagnosis['impressions_level']})</td>
+                    </tr>
+                    {"<tr style='background: " + ("#dcfce7" if ctr and ctr >= profile_config['min_ctr_threshold'] else "#fee2e2" if ctr and ctr < profile_config['min_ctr_threshold'] else "#f3f4f6") + ";'><td style='padding: 10px; border: 1px solid #e5e7eb;'><strong>CTR Actual</strong></td><td style='padding: 10px; border: 1px solid #e5e7eb; font-weight: bold; color: " + ("#16a34a" if ctr and ctr >= profile_config['min_ctr_threshold'] else "#dc2626" if ctr else "#6b7280") + ";'>" + f"{ctr:.1f}% (Meta: {profile_config['min_ctr_threshold']}%)" + "</td></tr>" if ctr is not None else ""}
+                    {"<tr style='background: #f3f4f6;'><td style='padding: 10px; border: 1px solid #e5e7eb;'><strong>Retention</strong></td><td style='padding: 10px; border: 1px solid #e5e7eb;'>" + f"{retention:.1f}%" + "</td></tr>" if retention is not None else ""}
+                    <tr>
                         <td style="padding: 10px; border: 1px solid #e5e7eb;"><strong>Vistas</strong></td>
                         <td style="padding: 10px; border: 1px solid #e5e7eb;">{views:,}</td>
                     </tr>
-                    <tr>
+                    <tr style="background: #f3f4f6;">
                         <td style="padding: 10px; border: 1px solid #e5e7eb;"><strong>VPH (Vistas por Hora)</strong></td>
                         <td style="padding: 10px; border: 1px solid #e5e7eb;">{vph:,}</td>
                     </tr>
-                    <tr style="background: #f3f4f6;">
-                        <td style="padding: 10px; border: 1px solid #e5e7eb;"><strong>Likes</strong></td>
-                        <td style="padding: 10px; border: 1px solid #e5e7eb;">{likes:,}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px; border: 1px solid #e5e7eb;"><strong>Comentarios</strong></td>
-                        <td style="padding: 10px; border: 1px solid #e5e7eb;">{comments:,}</td>
-                    </tr>
-                    <tr style="background: #f3f4f6;">
-                        <td style="padding: 10px; border: 1px solid #e5e7eb;"><strong>Tiempo desde publicacion</strong></td>
-                        <td style="padding: 10px; border: 1px solid #e5e7eb;">{hours_since:.1f} horas</td>
-                    </tr>
                 </table>
+
+                <h3 style="color: {'#16a34a' if diagnosis['syndrome'] == 'SUCCESS' else '#dc2626'};">🎯 VEREDICTO:</h3>
+                <div style="background: {'#dcfce7' if diagnosis['syndrome'] == 'SUCCESS' else '#fee2e2'}; padding: 15px; border-left: 4px solid {'#16a34a' if diagnosis['syndrome'] == 'SUCCESS' else '#dc2626'}; margin-bottom: 20px;">
+                    <p style="margin: 0;"><strong>Culpable Principal:</strong> {diagnosis['culprit']}</p>
+                    <p style="margin: 10px 0 0 0;"><strong>Razón:</strong> {diagnosis['reason']}</p>
+                </div>
+
+                <h3 style="color: #f59e0b;">💡 ACCIÓN SUGERIDA:</h3>
+                <div style="background: #fef3c7; padding: 15px; border-left: 4px solid #f59e0b; margin-bottom: 20px;">
+                    <p style="margin: 0;">{diagnosis['action']}</p>
+                </div>
 
                 <hr style="margin: 30px 0;">
                 <p style="color: #6b7280; font-size: 12px;">
                     Video ID: {video['video_id']}<br>
                     Checkpoint: {checkpoint_name}<br>
-                    Proximo reporte en el siguiente checkpoint
+                    Síndrome: {diagnosis['syndrome']}<br>
+                    Matriz de Diagnóstico de Causa Raíz Activada 🧠
                 </p>
             </body>
             </html>

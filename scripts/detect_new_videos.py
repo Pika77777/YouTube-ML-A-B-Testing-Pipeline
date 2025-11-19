@@ -79,6 +79,7 @@ def detect_new_videos():
             }
             variants = generate_ab_titles(video['title'], video_data, sb)
 
+            print(f"  [VIDEO TYPE] {variants.get('video_type', 'unknown').upper()}")
             print(f"  [PROFILE] {variants.get('profile', 'unknown').upper()}")
             print(f"  Variante A: {variants['variant_a']}")
             print(f"  Variante B: {variants['variant_b']}")
